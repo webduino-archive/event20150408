@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>moai</title>
+
+  <style>
+  img {
+    margin-top: 10px;
+    display: none;
+    width: 100%;
+  }
+  button {
+    font-size: 16px;
+  }
+  #picture.ready img.stand {
+    display: block;
+  }
+  #picture.action img.sing {
+    display: block;
+  }
+  #control {
+    width: 100%;
+    margin: 10px 0 10px 0;
+  }
+  #control button {
+    display: inline-block;
+    width: 40%;
+    height: 50px;
+  }
+  .setting {
+    display: inline-block;
+  }
+  form {
+    width: 100%;
+    font-size: 20px;
+  }
+  form>* {
+    margin-top: 5px;
+    vertical-align: middle; 
+  }
+  form>input {
+    width: 30%;
+    min-width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+  form>button {
+    width: 30%;
+    min-width: 50px;
+    height: 30px;
+  }
+  .noReady {
+    opacity: 0.3;
+  }
+  #msg {
+    font-size: 20px;
+  }
+  #msg.default::after {
+    content: "訊息";
+  }
+  #msg.waiting::after {
+    content: "Loading...";
+  }
+  #msg.ready::after {
+    content: "Ready!";
+  }
+  #msg.start::after {
+    content: "超音波啟動中...";
+  }
+  #msg.starting::after {
+    content: "超音波已啟動";
+  }
+  #msg.setting::after {
+    content: "設定中...";
+  }
+  #msg.set::after {
+    content: "設定完成";
+  }
+  </style>
+
+  <script src="//webduino.io/components/webcomponentsjs/webcomponents.js"></script>
+  <link rel='import' href='//webduino.io/components/webduino/web-arduino.html'></link>
+  <link rel='import' href='//webduino.io/components/webduino/wa-ultrasonic.html'></link>
+  <link rel='import' href='//webduino.io/components/webduino/wa-led.html'></link>
+</head>
+
+<body>
+  <div id="msg" class="waiting"></div>
+
+  <web-arduino id='board'>
+    <wa-ultrasonic id='ultrasonic' trig="11" echo="10"></wa-ultrasonic>
+    <wa-led id='led' pin="6" gnd="7"></wa-led>
+  </web-arduino>
+
+  <audio id='player' loop="loop">
+    <source src="music.mp3" type="audio/mpeg">
+    <source src="music.ogg" type="audio/ogg">
+    Your browser does not support the audio element.
+  </audio>
+
+  <form>
+    <label>device : </label><input type="text" id="device">
+    <button class="setting" id="set">設定</button>
+  </form>
+
+  <div id="control" class="noReady">
+    <button id="start" disabled>啟動超音波</button>
+    <button id="stop" disabled>關閉</button>
+  </div>
+
+  <div id="picture" class='ready'>
+    <img class="stand" src="stand.jpg">
+    <img class="sing" src="sing.gif">
+  </div>
+
+  <script type="text/javascript">
+  window.addEventListener('WebComponentsReady', function() {
+    var board = document.getElementById('board'),
+      led = document.getElementById('led'),
+      device = document.getElementById('device'),
+      setBtn = document.getElementById('set'),
+      msg = document.getElementById('msg');
+
+    msg.className = "ready";
+
+    setBtn.addEventListener('click', function(e) {
+      msg.className = "setting";
+      board.device = device.value;
+      board.on('ready', ready);
+      board.init();
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }, false);
+
+    function ready() {
+      var state,
+        control = document.getElementById('control'),
+        start = document.getElementById('start'),
+        stop = document.getElementById('stop'),
+        ultrasonic = document.getElementById('ultrasonic'),
+        picture = document.getElementById('picture'),
+        led = document.getElementById('led'),
+        player = document.getElementById('player');
+
+      // 示意 board ready
+      msg.className = "set";
+      led.on();
+      setTimeout(function() {
+        led.off();
+      }, 1000);
+      control.className = "";
+      stop.removeAttribute('disabled');
+      start.removeAttribute('disabled');
+
+      stop.addEventListener('click', function() {
+        var ultrasonic = document.getElementById('ultrasonic');
+        msg.className = "default";
+        picture.className = "ready";
+        led.off();
+        ultrasonic.stopPing();
+        player.load();
+        state = "";
+      });
+
+      start.addEventListener('click', function() {
+        var ratio;
+
+        state = "start";
+        msg.className = "start";
+        player.load();
+
+        ultrasonic.ping(function(cm) {
+          // console.log(cm);
+          // 一公尺內唱歌、亮燈
+          if (state !== "start") {
+            return false;
+          }
+
+          if (msg.className !== "starting") {
+            msg.className = "starting";
+          } 
+          if (cm < 100) {
+            led.on();
+            player.play();
+            picture.className = "action";
+
+            // 調整音量、亮度
+            ratio = getRatio(cm / 100, 0.25);
+            player.volume = ratio;
+            led.intensity = ratio;
+          } else {
+            led.off();
+            player.pause();
+            picture.className = "ready";
+          }
+        }, 1000);
+
+      }, false);
+    }
+
+    function getRatio(val, step) {
+      var ro;
+
+      val = val < 0.05 ? 1 : (1 - val);
+      ro = Math.floor(val / step);
+      ro = ro * step;
+      return ro > 1 ? 1 : ro;
+    }
+
+  }, false);
+  </script>
+</body>
+
+</html>
